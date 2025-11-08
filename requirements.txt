@@ -1,0 +1,23 @@
+# Core dependencies
+pandas>=2.0.0
+pydantic-settings>=2.0.0
+pydantic>=2.0.0
+
+# LLM/API dependencies
+# Note: dedalus-labs may need to be installed separately if not available on PyPI
+# Uncomment the line below if dedalus-labs is available via pip:
+# dedalus-labs>=0.1.0
+# 
+# If dedalus-labs is not available, the code will use a stub implementation
+# located in utils/dedalus_stub.py. This allows the code to run but will
+# not make actual API calls. Set DEDALUS_API_KEY environment variable
+# when using the real package.
+
+# Optional: For speech recognition if needed
+# openai-whisper>=20231117
+# speech-recognition>=3.10.0
+
+# Testing (optional)
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+
