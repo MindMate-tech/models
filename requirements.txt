@@ -6,7 +6,7 @@ pydantic-settings==2.6.1
 python-multipart==0.0.20
 
 # AI and ML
-dedalus-labs==0.1.40
+dedalus-labs>=0.1.0a9
 anthropic==0.42.0
 
 # Data processing
