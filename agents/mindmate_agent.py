@@ -7,15 +7,7 @@ from typing import Dict, List
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-try:
-    from dedalus_labs import AsyncDedalus, DedalusRunner
-except ImportError:
-    import sys
-    import os
-    sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'utils'))
-    from dedalus_stub import AsyncDedalus, DedalusRunner
-    print("⚠️  Using stub implementation for dedalus_labs. Install dedalus-labs for real API access.")
-
+from dedalus_labs import AsyncDedalus, DedalusRunner
 from tools.cognitive_assessment import CognitiveTools
 from tools.mri_analysis import MRIAnalyzer
 
