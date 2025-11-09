@@ -387,7 +387,9 @@ async def doctor_query(request: DoctorQueryRequest):
             "success": result.get("success", True),
             "query": request.query,
             "response": result.get("response", ""),
-            "tools_used": result.get("tools_used", [])
+            "tools_used": result.get("tools_used", []),
+            "model_info": result.get("model_info", {}),
+            "raw_data": result.get("raw_data")
         }
 
     except Exception as e:
