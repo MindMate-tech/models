@@ -175,10 +175,13 @@ Be professional, clear, and actionable. Include specific data points and percent
 
         except Exception as e:
             import traceback
-            traceback.print_exc()
+            error_trace = traceback.format_exc()
+            print(f"❌ Query error: {e}")
+            print(error_trace)
             return {
                 "success": False,
                 "error": str(e),
+                "error_type": type(e).__name__,
                 "query": doctor_query
             }
 
