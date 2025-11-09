@@ -19,6 +19,7 @@ from services.patient_cache import get_cache
 from tools.brain_region_mapper import BrainRegionMapper, analyze_mri_file
 from tools.memory_metrics_engine import MemoryMetricsEngine
 from config.settings import settings
+from agents.doctor.doctor_query_agent import DoctorQueryAgent
 
 # ==================== FastAPI App ====================
 
@@ -42,6 +43,7 @@ session_analyzer = SessionAnalyzer()
 cache = get_cache()
 brain_mapper = BrainRegionMapper()
 memory_engine = MemoryMetricsEngine()
+doctor_agent = DoctorQueryAgent()
 
 
 # ==================== Request Models ====================
@@ -81,6 +83,17 @@ class MRIAnalysisRequest(BaseModel):
     baseline_mri_path: Optional[str] = None
 
 
+class DoctorQueryRequest(BaseModel):
+    """Request for doctor to query patient data in natural language"""
+    query: str = Field(
+        description="Natural language query from doctor"
+    )
+    context: Optional[Dict] = Field(
+        default_factory=dict,
+        description="Optional context (patient_id, doctor_id, etc.)"
+    )
+
+
 # ==================== Health & Info ====================
 
 @app.get("/")
@@ -94,7 +107,19 @@ async def root():
             "analyze_session": "POST /analyze/session",
             "patient_dashboard": "POST /patient/dashboard",
             "mri_analysis": "POST /mri/analyze",
+            "doctor_query": "POST /doctor/query - AI-powered natural language queries",
+            "at_risk_patients": "GET /doctor/at-risk",
+            "patient_lookup": "GET /doctor/patient/{patient_id}",
             "cache_stats": "GET /cache/stats"
+        },
+        "new_features": {
+            "doctor_ai_agent": "Ask questions in natural language, AI uses tools to answer",
+            "example_queries": [
+                "Show me all at-risk patients",
+                "Why is patient declining?",
+                "Compare two patients",
+                "Find patients that need attention"
+            ]
         }
     }
 
@@ -327,6 +352,113 @@ async def analyze_mri(request: MRIAnalysisRequest):
         raise HTTPException(
             status_code=500,
             detail=f"MRI analysis failed: {str(e)}"
+        )
+
+
+# ==================== Doctor Query Endpoint (AI-Powered) ====================
+
+@app.post("/doctor/query")
+async def doctor_query(request: DoctorQueryRequest):
+    """
+    AI-powered natural language query interface for doctors
+
+    Allows doctors to ask questions about patients in natural language.
+    The AI agent will use appropriate tools to answer the query.
+
+    Example queries:
+    - "Show me all at-risk patients"
+    - "Why is patient X declining?"
+    - "Compare patients A and B"
+    - "Find female patients over 60"
+
+    Returns intelligent analysis with reasoning and recommendations.
+    """
+    try:
+        print(f"\n{'='*60}")
+        print(f"🩺 Doctor Query: {request.query}")
+        print(f"{'='*60}")
+
+        result = await doctor_agent.query(
+            doctor_query=request.query,
+            context=request.context
+        )
+
+        return {
+            "success": result.get("success", True),
+            "query": request.query,
+            "response": result.get("response", ""),
+            "tools_used": result.get("tools_used", [])
+        }
+
+    except Exception as e:
+        print(f"❌ Doctor query error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Query failed: {str(e)}"
+        )
+
+
+@app.get("/doctor/at-risk")
+async def get_at_risk_patients_quick(threshold: float = 0.5):
+    """
+    Quick endpoint to get at-risk patients (no AI, faster)
+
+    Args:
+        threshold: Score threshold (0-1). Patients below this are at risk.
+
+    Returns:
+        List of at-risk patients with detailed risk reasoning
+    """
+    try:
+        result = await doctor_agent.find_at_risk(threshold=threshold)
+
+        return {
+            "success": True,
+            "count": result.get("count", 0),
+            "threshold": threshold,
+            "patients": result.get("data", [])
+        }
+
+    except Exception as e:
+        print(f"❌ At-risk query error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"At-risk query failed: {str(e)}"
+        )
+
+
+@app.get("/doctor/patient/{patient_id}")
+async def get_patient_quick(patient_id: UUID):
+    """
+    Quick endpoint to get patient details (no AI, faster)
+
+    Args:
+        patient_id: Patient UUID
+
+    Returns:
+        Patient details with session history
+    """
+    try:
+        result = await doctor_agent.quick_lookup(str(patient_id))
+
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=404,
+                detail=result.get("error", "Patient not found")
+            )
+
+        return {
+            "success": True,
+            "patient": result.get("data", {})
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Patient lookup error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Patient lookup failed: {str(e)}"
         )
 
 
