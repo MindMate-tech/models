@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from db.supabase_client import get_supabase
+from agents.doctor.predictive_scoring import predictor
 
 
 class DoctorTools:
@@ -17,6 +18,7 @@ class DoctorTools:
 
     def __init__(self):
         self.supabase = get_supabase()
+        self.predictor = predictor
 
     def _calculate_age(self, dob: str) -> int:
         """Calculate age from date of birth"""
@@ -412,4 +414,26 @@ class DoctorTools:
             'patient_id': patient_id,
             'total_sessions': len(session_list),
             'sessions': session_list
+        }
+
+    def predict_decline_risk(self, min_probability: float = 0.4) -> List[Dict]:
+        """
+        Predict which patients are likely to decline in the next month
+
+        Args:
+            min_probability: Minimum decline probability to include (0-1)
+
+        Returns:
+            List of patients with decline predictions, sorted by risk
+        """
+        predictions = self.predictor.predict_all_patients(min_decline_prob=min_probability)
+
+        # Add cache info
+        cache_info = self.predictor.get_cache_info()
+
+        return {
+            'predictions': predictions,
+            'count': len(predictions),
+            'cache_info': cache_info,
+            'threshold': min_probability
         }
