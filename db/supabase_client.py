@@ -1,6 +1,6 @@
 """Supabase client for cognitive API"""
 import os
-from supabase import create_client, Client
+from supabase import create_client, Client, ClientOptions
 from dotenv import load_dotenv
 import httpx
 
@@ -22,10 +22,18 @@ def get_supabase() -> Client:
         limits=httpx.Limits(max_keepalive_connections=5, max_connections=10)
     )
 
-    return create_client(
-        SUPABASE_URL,
-        SUPABASE_KEY,
-        options={
-            'client': http_client
-        }
+    # Use ClientOptions to properly pass the custom client
+    options = ClientOptions(
+        schema="public",
+        headers={},
+        auto_refresh_token=True,
+        persist_session=True,
     )
+
+    # Create the client and then manually set the http client
+    client = create_client(SUPABASE_URL, SUPABASE_KEY, options=options)
+
+    # Replace the default httpx client with our HTTP/1.1 client
+    client.postgrest.session = http_client
+
+    return client
