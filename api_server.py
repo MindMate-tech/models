@@ -462,6 +462,54 @@ async def get_patient_quick(patient_id: UUID):
         )
 
 
+@app.get("/doctor/database-stats")
+async def get_database_stats():
+    """
+    Diagnostic endpoint to check database contents
+    Shows counts and sample data without exposing sensitive info
+    """
+    try:
+        from db.supabase_client import get_supabase
+        supabase = get_supabase()
+
+        # Count patients
+        patients_result = supabase.table("patients").select("*", count="exact").limit(3).execute()
+        patient_count = len(patients_result.data)
+
+        # Count sessions
+        sessions_result = supabase.table("sessions").select("*", count="exact").limit(3).execute()
+        session_count = len(sessions_result.data)
+
+        # Get sample scores
+        sample_scores = []
+        if sessions_result.data:
+            for session in sessions_result.data[:3]:
+                sample_scores.append(session.get('overall_score', 'None'))
+
+        return {
+            "success": True,
+            "database": {
+                "total_patients": patient_count,
+                "total_sessions": session_count,
+                "sample_scores": sample_scores,
+                "patients_table_columns": list(patients_result.data[0].keys()) if patients_result.data else [],
+                "sessions_table_columns": list(sessions_result.data[0].keys()) if sessions_result.data else []
+            }
+        }
+
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Database stats error: {e}")
+        print(error_trace)
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": error_trace
+        }
+
+
 # ==================== Cache Management ====================
 
 @app.get("/cache/stats")
