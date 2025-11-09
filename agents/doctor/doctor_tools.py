@@ -448,10 +448,13 @@ class DoctorTools:
         Returns:
             Session details with patient context and analysis
         """
-        session_result = self.supabase.table("sessions").select("*").eq("session_id", session_id).execute()
+        try:
+            session_result = self.supabase.table("sessions").select("*").eq("session_id", session_id).execute()
 
-        if not session_result.data:
-            return {"error": f"Session {session_id} not found"}
+            if not session_result.data:
+                return {"error": f"Session {session_id} not found"}
+        except Exception as e:
+            return {"error": f"Invalid session_id format or database error: {str(e)}"}
 
         session = session_result.data[0]
         patient_id = session.get('patient_id')
