@@ -437,3 +437,167 @@ class DoctorTools:
             'cache_info': cache_info,
             'threshold': min_probability
         }
+
+    def get_session_by_id(self, session_id: str) -> Dict:
+        """
+        Get detailed information about a specific session
+
+        Args:
+            session_id: UUID of the session
+
+        Returns:
+            Session details with patient context and analysis
+        """
+        session_result = self.supabase.table("sessions").select("*").eq("session_id", session_id).execute()
+
+        if not session_result.data:
+            return {"error": f"Session {session_id} not found"}
+
+        session = session_result.data[0]
+        patient_id = session.get('patient_id')
+
+        # Get patient info for context
+        patient_result = self.supabase.table("patients").select("*").eq("patient_id", patient_id).execute()
+
+        patient_name = "Unknown"
+        patient_age = 0
+
+        if patient_result.data:
+            patient = patient_result.data[0]
+            patient_name = patient.get('name', 'Unknown')
+            patient_age = self._calculate_age(patient.get('dob'))
+
+        # Get other sessions for comparison
+        other_sessions = (
+            self.supabase.table("sessions")
+            .select("*")
+            .eq("patient_id", patient_id)
+            .order("session_date", desc=True)
+            .limit(5)
+            .execute()
+        )
+
+        # Calculate how this session compares to others
+        all_scores = [s.get('overall_score', 0) for s in other_sessions.data if s.get('overall_score') is not None]
+        current_score = session.get('overall_score', 0)
+
+        comparison = "N/A"
+        if len(all_scores) > 1:
+            avg_other_scores = sum([s for s in all_scores if s != current_score]) / max(1, len(all_scores) - 1)
+            if current_score > avg_other_scores * 1.1:
+                comparison = "Above average"
+            elif current_score < avg_other_scores * 0.9:
+                comparison = "Below average"
+            else:
+                comparison = "Average"
+
+        # Extract AI analysis if available
+        ai_data = session.get('ai_extracted_data', {})
+
+        return {
+            'session_id': session_id,
+            'patient_id': patient_id,
+            'patient_name': patient_name,
+            'patient_age': patient_age,
+            'session_date': session.get('session_date'),
+            'overall_score': current_score,
+            'duration_minutes': session.get('duration_minutes'),
+            'exercise_type': session.get('exercise_type'),
+            'comparison_to_average': comparison,
+            'total_patient_sessions': len(other_sessions.data),
+            'ai_analysis': {
+                'memories_extracted': ai_data.get('memories_extracted', []),
+                'cognitive_test_scores': ai_data.get('cognitive_test_scores', []),
+                'notable_events': ai_data.get('notable_events', []),
+                'doctor_alerts': ai_data.get('doctor_alerts', [])
+            },
+            'notes': session.get('notes', '')
+        }
+
+    def analyze_session_performance(self, session_id: str) -> Dict:
+        """
+        Detailed performance analysis for a specific session
+
+        Args:
+            session_id: UUID of the session
+
+        Returns:
+            Analysis with insights, concerns, and recommendations
+        """
+        session_info = self.get_session_by_id(session_id)
+
+        if "error" in session_info:
+            return session_info
+
+        score = session_info.get('overall_score', 0)
+        comparison = session_info.get('comparison_to_average', 'N/A')
+        ai_analysis = session_info.get('ai_analysis', {})
+
+        # Analyze performance
+        findings = []
+
+        # Score analysis
+        if score < 30:
+            findings.append({
+                "category": "Critical Performance",
+                "finding": f"Very low score ({score}%)",
+                "severity": "critical"
+            })
+        elif score < 50:
+            findings.append({
+                "category": "Below Threshold",
+                "finding": f"Score ({score}%) below acceptable level",
+                "severity": "high"
+            })
+        elif score > 80:
+            findings.append({
+                "category": "Strong Performance",
+                "finding": f"Score ({score}%) above average",
+                "severity": "positive"
+            })
+
+        # Comparison analysis
+        if comparison == "Below average":
+            findings.append({
+                "category": "Declining Performance",
+                "finding": "Performance below patient's typical level",
+                "severity": "medium"
+            })
+
+        # AI alerts
+        alerts = ai_analysis.get('doctor_alerts', [])
+        if alerts:
+            for alert in alerts:
+                findings.append({
+                    "category": "AI Alert",
+                    "finding": alert,
+                    "severity": "high"
+                })
+
+        recommendations = []
+
+        if score < 50:
+            recommendations.append("Consider immediate follow-up session")
+            recommendations.append("Review patient's medication and sleep patterns")
+
+        if comparison == "Below average":
+            recommendations.append("Investigate recent life changes or stressors")
+
+        if len(findings) == 0:
+            findings.append({
+                "category": "Normal Performance",
+                "finding": "No significant concerns identified",
+                "severity": "none"
+            })
+            recommendations.append("Continue regular session schedule")
+
+        return {
+            'session_id': session_id,
+            'patient_name': session_info.get('patient_name'),
+            'session_date': session_info.get('session_date'),
+            'score': score,
+            'comparison': comparison,
+            'findings': findings,
+            'recommendations': recommendations,
+            'ai_alerts': alerts
+        }

@@ -61,8 +61,17 @@ You have access to these tools (call them as Python functions):
 6. tools.get_session_summary(patient_id: str, limit: int = 10) -> Dict
    Get recent session history for a patient
 
+7. tools.get_session_by_id(session_id: str) -> Dict
+   Get detailed information about a specific session
+   Returns session data with patient context and AI analysis
+
+8. tools.analyze_session_performance(session_id: str) -> Dict
+   Detailed performance analysis for a specific session
+   Returns findings, concerns, and recommendations
+
 Always explain your reasoning and provide actionable insights.
 When showing at-risk patients, include the risk_reasons to explain WHY they're flagged.
+When analyzing sessions, provide context by comparing to patient's other sessions.
 """
 
     def _analyze_query_complexity(self, query: str) -> Dict:
@@ -154,19 +163,33 @@ When showing at-risk patients, include the risk_reasons to explain WHY they're f
             # Parse intent and execute appropriate tool
             query_lower = doctor_query.lower()
 
-            # Route based on query content
-            if 'predict' in query_lower or 'forecast' in query_lower or 'next month' in query_lower or 'will decline' in query_lower:
+            # Route based on query content and context
+            # Session-specific queries (check session_id in context first)
+            if context.get('session_id'):
+                if 'analyz' in query_lower or 'perform' in query_lower or 'insight' in query_lower:
+                    tool_result = self.tools.analyze_session_performance(context['session_id'])
+                    tool_name = "analyze_session_performance"
+                else:
+                    # Default to getting session details
+                    tool_result = self.tools.get_session_by_id(context['session_id'])
+                    tool_name = "get_session_by_id"
+
+            # Patient prediction queries
+            elif 'predict' in query_lower or 'forecast' in query_lower or 'next month' in query_lower or 'will decline' in query_lower:
                 tool_result = self.tools.predict_decline_risk(min_probability=0.4)
                 tool_name = "predict_decline_risk"
 
+            # At-risk queries
             elif 'at risk' in query_lower or 'at-risk' in query_lower or 'high risk' in query_lower:
                 tool_result = self.tools.get_at_risk_patients(threshold=0.5)
                 tool_name = "get_at_risk_patients"
 
+            # Patient decline analysis
             elif 'declin' in query_lower and context.get('patient_id'):
                 tool_result = self.tools.analyze_patient_decline(context['patient_id'])
                 tool_name = "analyze_patient_decline"
 
+            # Comparison queries
             elif 'compar' in query_lower or context.get('is_follow_up'):
                 # Extract patient IDs from query or context (including memory)
                 patient_ids = []
@@ -186,14 +209,22 @@ When showing at-risk patients, include the risk_reasons to explain WHY they're f
                     tool_result = self.tools.get_at_risk_patients(threshold=0.5)
                     tool_name = "get_at_risk_patients"
 
+            # Search queries
             elif 'female' in query_lower or 'male' in query_lower or 'search' in query_lower or 'find' in query_lower:
                 gender = 'female' if 'female' in query_lower else 'male' if 'male' in query_lower else None
                 tool_result = self.tools.search_patients(gender=gender)
                 tool_name = "search_patients"
 
+            # Patient-specific queries
             elif context.get('patient_id'):
-                tool_result = self.tools.get_patient_by_id(context['patient_id'])
-                tool_name = "get_patient_by_id"
+                if 'session' in query_lower:
+                    # Get session history for patient
+                    tool_result = self.tools.get_session_summary(context['patient_id'], limit=10)
+                    tool_name = "get_session_summary"
+                else:
+                    # Get patient details
+                    tool_result = self.tools.get_patient_by_id(context['patient_id'])
+                    tool_name = "get_patient_by_id"
 
             else:
                 # Default to at-risk
